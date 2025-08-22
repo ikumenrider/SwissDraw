@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swiss Draw App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 sm:p-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">スイスドロー トーナメント</h1>
+
+        <!-- 参加者追加フォーム -->
+        <div class="bg-gray-50 p-4 rounded-lg mb-6">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">参加者</h2>
+            <p class="text-sm text-gray-500 mb-1">参加者の名前を1行に1人ずつ入力してください</p>
+            <div class="flex flex-col sm:flex-row gap-4 mb-4">
+                <textarea id="playerNameInput" rows="4" placeholder="例：山田太郎&#10;田中花子&#10;鈴木健太" class="flex-grow p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                <button onclick="addPlayers()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out transform hover:scale-105">参加者を追加</button>
+            </div>
+            <div id="playerList" class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-gray-600">
+                <!-- 参加者リストはここに動的に追加されます -->
+            </div>
+            <div id="playerCount" class="text-left text-sm text-gray-500 mt-2">現在 0 人が登録されています。</div>
+        </div>
+        
+        <!-- コントロールボタン -->
+        <div class="flex flex-wrap justify-center gap-4 mb-6">
+            <button id="startRoundBtn" onclick="startNewRound()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-md transition duration-300 ease-in-out transform hover:scale-105">ラウンド開始</button>
+            <button id="resetBtn" onclick="showResetConfirmation()" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-md transition duration-300 ease-in-out transform hover:scale-105">リセット</button>
+        </div>
+        
+        <!-- ラウンドとペアリング -->
+        <div id="roundsContainer" class="bg-white p-4 rounded-lg shadow-inner mb-6">
+            <h2 class="text-xl font-semibold text-gray-700 mb-4">現在のラウンド</h2>
+            <div id="currentRoundInfo" class="text-center text-gray-500 italic mb-4">ラウンドはまだ開始されていません。</div>
+            <div id="pairings" class="space-y-4">
+                <!-- ペアリングはここに動的に追加されます -->
+            </div>
+            <!-- 次のラウンドに進む/最終結果ボタン -->
+            <button id="nextRoundBtn" onclick="proceedToNextStep()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-md transition duration-300 ease-in-out transform hover:scale-105 mt-4 w-full" style="display: none;">次のラウンドに進む</button>
+        </div>
+        
+        <!-- 結果表示 -->
+        <div class="bg-gray-50 p-4 rounded-lg">
+            <h2 id="standingsHeader" class="text-xl font-semibold text-gray-700 mb-4">順位</h2>
+            <div id="standings" class="space-y-2">
+                <!-- 順位はここに動的に追加されます -->
+            </div>
+        </div>
+
+        <!-- メッセージボックス -->
+        <div id="messageBox" class="fixed bottom-4 right-4 bg-gray-800 text-white p-3 rounded-md shadow-lg hidden">
+            <!-- メッセージはここに表示されます -->
+        </div>
+
+        <!-- カスタム確認ダイアログ -->
+        <div id="confirmationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                <div class="mt-3 text-center">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900">本当にリセットしますか？</h3>
+                    <div class="mt-2 px-7 py-3">
+                        <p class="text-sm text-gray-500">全てのトーナメントデータが失われます。</p>
+                    </div>
+                    <div class="items-center px-4 py-3">
+                        <button id="confirmResetBtn" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 mb-2">
+                            リセット
+                        </button>
+                        <button id="cancelResetBtn" class="px-4 py-2 bg-gray-300 text-gray-700 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                            キャンセル
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // プレイヤーオブジェクトを格納する配列
+        let players = [];
+        // トーナメントのラウンドを格納する配列
+        let tournamentRounds = [];
+        // 現在のラウンドのペアリングを格納する配列
+        let currentPairings = [];
+        // 現在のラウンド番号
+        let currentRound = 0;
+        // 適正ラウンド数
+        let requiredRounds = 0;
+        // 最終結果表示フラグ
+        let isFinalStandings = false;
+
+        // UI要素の取得
+        const playerNameInput = document.getElementById('playerNameInput');
+        const playerListDiv = document.getElementById('playerList');
+        const pairingsDiv = document.getElementById('pairings');
+        const standingsDiv = document.getElementById('standings');
+        const startRoundBtn = document.getElementById('startRoundBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const currentRoundInfoDiv = document.getElementById('currentRoundInfo');
+        const messageBox = document.getElementById('messageBox');
+        const playerCountDiv = document.getElementById('playerCount');
+        const nextRoundBtn = document.getElementById('nextRoundBtn');
+        const confirmationModal = document.getElementById('confirmationModal');
+        const confirmResetBtn = document.getElementById('confirmResetBtn');
+        const cancelResetBtn = document.getElementById('cancelResetBtn');
+        const standingsHeader = document.getElementById('standingsHeader');
+
+        // メッセージを表示する関数
+        function showMessage(message) {
+            messageBox.textContent = message;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 3000); // 3秒後に非表示
+        }
+        
+        // リセット確認ダイアログを表示する関数
+        function showResetConfirmation() {
+            confirmationModal.classList.remove('hidden');
+        }
+
+        // リセット確認ダイアログを閉じる関数
+        function hideResetConfirmation() {
+            confirmationModal.classList.add('hidden');
+        }
+
+        // 複数のプレイヤーを一度に追加する関数
+        function addPlayers() {
+            const names = playerNameInput.value.trim().split('\n').map(name => name.trim()).filter(name => name !== '');
+            if (names.length === 0) {
+                showMessage('名前を入力してください。');
+                return;
+            }
+
+            const newPlayers = [];
+            let duplicateCount = 0;
+
+            names.forEach(name => {
+                if (players.some(player => player.name === name)) {
+                    duplicateCount++;
+                } else {
+                    newPlayers.push({
+                        name: name,
+                        score: 0,
+                        opponents: [],
+                        byes: 0,
+                        gamesWon: 0, // 取得ゲーム数
+                        gamesLost: 0, // 失ったゲーム数
+                    });
+                }
+            });
+
+            if (newPlayers.length > 0) {
+                players.push(...newPlayers);
+                players.sort((a, b) => a.name.localeCompare(b.name));
+                playerNameInput.value = '';
+                renderPlayerList();
+                renderStandings();
+                calculateRequiredRounds();
+                let message = `${newPlayers.length}人の参加者を追加しました。`;
+                if (duplicateCount > 0) {
+                    message += ` (${duplicateCount}個の重複した名前は無視されました。)`;
+                }
+                showMessage(message);
+            } else {
+                showMessage('有効な参加者がいませんでした。');
+            }
+        }
+        
+        // 参加者リストからプレイヤーを削除する関数
+        function removePlayer(index) {
+            if (currentRound > 0) {
+                showMessage('トーナメント開始後は参加者を削除できません。');
+                return;
+            }
+            const removedPlayerName = players[index].name;
+            players.splice(index, 1);
+            renderPlayerList();
+            renderStandings();
+            calculateRequiredRounds();
+            showMessage(`${removedPlayerName}を参加者リストから削除しました。`);
+        }
+        
+        // 参加人数から適正ラウンド数を計算する関数
+        function calculateRequiredRounds() {
+            const n = players.length;
+            if (n <= 1) {
+                requiredRounds = 0;
+            } else {
+                // 2^r >= n となる最小のrを求める
+                requiredRounds = Math.ceil(Math.log2(n));
+            }
+        }
+
+        // プレイヤーリストをレンダリングする関数
+        function renderPlayerList() {
+            playerListDiv.innerHTML = players.map((player, index) => {
+                return `
+                    <div class="flex items-center bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                        <span class="mr-2">${player.name}</span>
+                        <button onclick="removePlayer(${index})" class="text-red-500 hover:text-red-700 font-bold ml-auto leading-none">&times;</button>
+                    </div>`;
+            }).join('');
+            // プレイヤー数の表示を更新
+            playerCountDiv.textContent = `現在 ${players.length} 人が登録されています。`;
+        }
+
+        // スイスドローのペアリングを作成する関数
+        function createPairings() {
+            // スコアの高い順にプレイヤーをソート
+            const sortedPlayers = [...players].sort((a, b) => {
+                if (b.score !== a.score) return b.score - a.score;
+                // スコアが同じ場合はOMWPでソート
+                const omwpA = calculateOMWP(a);
+                const omwpB = calculateOMWP(b);
+                if (omwpB !== omwpA) return omwpB - omwpA;
+                // OMWPも同じ場合はGWPでソート
+                const gwpA = calculateGWP(a);
+                const gwpB = calculateGWP(b);
+                return gwpB - gwpA;
+            });
+
+            const unpairedPlayers = [...sortedPlayers];
+            const pairings = [];
+            
+            // 参加者数が奇数の場合、Bye（不戦勝）を決定
+            if (unpairedPlayers.length % 2 !== 0) {
+                // Byeは、最もスコアが低く、まだByeを受けていないプレイヤーに与える
+                const byePlayer = unpairedPlayers
+                    .filter(p => p.byes === 0)
+                    .sort((a, b) => a.score - b.score)
+                    .shift() || unpairedPlayers.pop(); // 見つからない場合は最後のプレイヤー
+
+                pairings.push({ player1: byePlayer.name, player2: 'Bye', result: 'player1' });
+                // byePlayerを未ペアリングリストから削除
+                const byeIndex = unpairedPlayers.findIndex(p => p.name === byePlayer.name);
+                if(byeIndex !== -1) {
+                    unpairedPlayers.splice(byeIndex, 1);
+                }
+            }
+            
+            // ペアリングを作成
+            while (unpairedPlayers.length > 0) {
+                const player1 = unpairedPlayers.shift();
+                let opponentFound = false;
+
+                // スコアの近い順に相手を探す
+                for (let i = 0; i < unpairedPlayers.length; i++) {
+                    const player2 = unpairedPlayers[i];
+                    // 対戦履歴がないか確認
+                    if (!player1.opponents.includes(player2.name)) {
+                        pairings.push({ player1: player1.name, player2: player2.name, result: null, games: { p1: 0, p2: 0 }, isConfirmed: false });
+                        unpairedPlayers.splice(i, 1);
+                        opponentFound = true;
+                        break;
+                    }
+                }
+
+                // 適切な相手が見つからない場合、再対戦を許容する
+                if (!opponentFound) {
+                    const player2 = unpairedPlayers.shift();
+                    pairings.push({ player1: player1.name, player2: player2.name, result: null, games: { p1: 0, p2: 0 }, isConfirmed: false });
+                }
+            }
+
+            return pairings;
+        }
+
+        // ペアリングをレンダリングする関数
+        function renderPairings() {
+            pairingsDiv.innerHTML = '';
+            currentPairings.forEach((pairing, index) => {
+                const pairingDiv = document.createElement('div');
+                
+                // 結果が確定している場合は緑のボーダーを追加
+                let cardClass = 'bg-white p-4 rounded-md shadow-sm border border-gray-200';
+                if (pairing.isConfirmed) {
+                    cardClass = 'bg-white p-4 rounded-md shadow-sm border-2 border-green-500';
+                }
+                pairingDiv.className = cardClass;
+                
+                const player1NameClass = (pairing.result === 'player1') ? 'text-green-600 font-bold' : 'text-gray-800 font-medium';
+                const player2NameClass = (pairing.result === 'player2') ? 'text-green-600 font-bold' : 'text-gray-800 font-medium';
+                
+                const player2Name = pairing.player2 === 'Bye' ? 'Bye' : pairing.player2;
+                const vsText = player2Name === 'Bye' ? '' : 'vs';
+
+                let pairingContent = `
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-lg ${player1NameClass}">${pairing.player1}</span> ${vsText} <span class="text-lg ${player2NameClass}">${player2Name}</span>
+                    </div>`;
+
+                if (!pairing.isConfirmed) {
+                    pairingContent += `
+                        <div class="flex justify-center items-center gap-4 mt-2">
+                            <div class="flex items-center gap-2">
+                                <button onclick="changeScore(${index}, 1, -1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-md transition duration-200">-</button>
+                                <span id="p1-score-${index}" class="text-xl font-bold w-6 text-center">${pairing.games.p1}</span>
+                                <button onclick="changeScore(${index}, 1, 1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-md transition duration-200">+</button>
+                            </div>
+                            <span class="text-xl font-bold">:</span>
+                            <div class="flex items-center gap-2">
+                                <button onclick="changeScore(${index}, 2, -1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-md transition duration-200">-</button>
+                                <span id="p2-score-${index}" class="text-xl font-bold w-6 text-center">${pairing.games.p2}</span>
+                                <button onclick="changeScore(${index}, 2, 1)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-md transition duration-200">+</button>
+                            </div>
+                        </div>
+                        <div class="flex justify-center mt-4">
+                            <button onclick="submitGameScore(${index})" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md transition duration-200">確定</button>
+                        </div>
+                    `;
+                } else {
+                    let resultText = '';
+                    if (pairing.result === 'player1') {
+                        resultText = `${pairing.player1}の勝利`;
+                    } else if (pairing.result === 'player2') {
+                        resultText = `${pairing.player2}の勝利`;
+                    } else if (pairing.result === 'draw') {
+                        resultText = '引き分け';
+                    }
+                    pairingContent += `
+                        <div class="mt-2 text-center text-sm font-semibold text-gray-700">${resultText}</div>
+                        <div class="mt-1 text-center text-xs text-gray-500">ゲームスコア: ${pairing.games.p1} - ${pairing.games.p2}</div>
+                        <div class="flex justify-center mt-4">
+                            <button onclick="revertGameScore(${index})" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md transition duration-200">確定解除</button>
+                        </div>
+                    `;
+                }
+                
+                if (player2Name === 'Bye') {
+                    pairingContent = `
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-lg ${player1NameClass}">${pairing.player1}</span> <span class="text-lg text-gray-800 font-medium">Bye</span>
+                        </div>
+                        <div class="mt-2 text-center text-sm font-semibold text-gray-700">不戦勝</div>
+                    `;
+                }
+
+                pairingDiv.innerHTML = pairingContent;
+                pairingsDiv.appendChild(pairingDiv);
+            });
+        }
+        
+        // スコアを変更する関数
+        function changeScore(pairingIndex, playerNum, delta) {
+            const pairing = currentPairings[pairingIndex];
+            if (playerNum === 1) {
+                pairing.games.p1 = Math.max(0, pairing.games.p1 + delta);
+            } else {
+                pairing.games.p2 = Math.max(0, pairing.games.p2 + delta);
+            }
+            document.getElementById(`p1-score-${pairingIndex}`).textContent = pairing.games.p1;
+            document.getElementById(`p2-score-${pairingIndex}`).textContent = pairing.games.p2;
+        }
+
+        // ゲームスコアを確定する関数
+        function submitGameScore(pairingIndex) {
+            const pairing = currentPairings[pairingIndex];
+            
+            // 勝敗を判定
+            if (pairing.games.p1 > pairing.games.p2) {
+                pairing.result = 'player1';
+            } else if (pairing.games.p2 > pairing.games.p1) {
+                pairing.result = 'player2';
+            } else {
+                pairing.result = 'draw'; // 引き分け
+            }
+
+            pairing.isConfirmed = true;
+            
+            renderPairings();
+            
+            // 全ての結果が入力されたら「次のラウンドに進む」ボタンを表示
+            const allResultsEntered = currentPairings.every(p => p.isConfirmed || p.player2 === 'Bye');
+            if (allResultsEntered) {
+                nextRoundBtn.style.display = 'block';
+                if (currentRound >= requiredRounds) {
+                    nextRoundBtn.textContent = '最終結果';
+                    nextRoundBtn.onclick = showFinalStandings;
+                } else {
+                    nextRoundBtn.textContent = '次のラウンドに進む';
+                    nextRoundBtn.onclick = proceedToNextStep;  
+                }
+            } else {
+                nextRoundBtn.style.display = 'none';
+            }
+        }
+
+        // ゲームスコアを元に戻す関数
+        function revertGameScore(pairingIndex) {
+            const pairing = currentPairings[pairingIndex];
+            pairing.isConfirmed = false;
+            pairing.result = null;
+            renderPairings();
+            nextRoundBtn.style.display = 'none';
+            showMessage('試合結果を解除しました。');
+        }
+        
+        // プレイヤーのOMWP（オポネント・マッチ・ウィン・パーセンテージ）を計算する関数
+        function calculateOMWP(player) {
+            if (player.opponents.length === 0) {
+                return 0;
+            }
+
+            let totalOpponentMWP = 0;
+            let opponentCount = 0;
+            
+            player.opponents.forEach(opponentName => {
+                const opponent = players.find(p => p.name === opponentName);
+                if (opponent) {
+                    const matchesPlayed = opponent.opponents.length;
+                    if (matchesPlayed > 0) {
+                        const opponentMWP = opponent.score / matchesPlayed;
+                        totalOpponentMWP += Math.max(0.33, opponentMWP);
+                        opponentCount++;
+                    }
+                }
+            });
+
+            return opponentCount > 0 ? totalOpponentMWP / opponentCount : 0;
+        }
+        
+        // プレイヤーのGWP（ゲーム・ウィン・パーセンテージ）を計算する関数
+        function calculateGWP(player) {
+            const totalGames = player.gamesWon + player.gamesLost;
+            if (totalGames === 0) {
+                return 0;
+            }
+            return player.gamesWon / totalGames;
+        }
+
+        // 順位をレンダリングする関数
+        function renderStandings() {
+            // スコア、OMWP、GWPに基づいてプレイヤーをソート
+            players.sort((a, b) => {
+                if (b.score !== a.score) {
+                    return b.score - a.score;
+                }
+                const omwpA = calculateOMWP(a);
+                const omwpB = calculateOMWP(b);
+                if (omwpB !== omwpA) {
+                    return omwpB - omwpA;
+                }
+                const gwpA = calculateGWP(a);
+                const gwpB = calculateGWP(b);
+                return gwpB - gwpA;
+            });
+            
+            standingsDiv.innerHTML = `
+                <div class="flex font-semibold text-gray-700 border-b-2 border-gray-300 pb-2">
+                    <span class="w-1/6">順位</span>
+                    <span class="w-2/6">名前</span>
+                    <span class="w-1/6 text-center">スコア</span>
+                    <span class="w-1/6 text-center">OMWP</span>
+                    <span class="w-1/6 text-center">GWP</span>
+                </div>
+            `;
+
+            players.forEach((player, index) => {
+                const playerDiv = document.createElement('div');
+                playerDiv.className = 'flex items-center text-gray-800 py-2 border-b border-gray-200';
+                
+                const omwp = calculateOMWP(player);
+                const gwp = calculateGWP(player);
+                
+                let rankDisplay = index + 1;
+                let playerNameWithMedal = player.name;
+
+                // 最終結果表示時のみメダルを表示
+                if (isFinalStandings && index < 3) {
+                    if (index === 0) {
+                        playerNameWithMedal = `👑 ${player.name}`;
+                    } else if (index === 1) {
+                        playerNameWithMedal = `🥈 ${player.name}`;
+                    } else if (index === 2) {
+                        playerNameWithMedal = `🥉 ${player.name}`;
+                    }
+                }
+
+                playerDiv.innerHTML = `
+                    <span class="w-1/6 font-bold text-lg text-gray-600">${rankDisplay}</span>
+                    <span class="w-2/6">${playerNameWithMedal}</span>
+                    <span class="w-1/6 font-semibold text-center">${player.score}</span>
+                    <span class="w-1/6 text-sm text-center">${omwp.toFixed(2)}</span>
+                    <span class="w-1/6 text-sm text-center">${gwp.toFixed(2)}</span>
+                `;
+                standingsDiv.appendChild(playerDiv);
+            });
+        }
+        
+        // 最終結果を表示する関数
+        function showFinalStandings() {
+            isFinalStandings = true;
+            renderStandings(); // 豪華な順位表示に切り替える
+            pairingsDiv.innerHTML = ''; // ペアリングをクリア
+            
+            // 上位3名の情報を取得
+            const topPlayers = players.slice(0, 3);
+            const topPlayerNamesHtml = topPlayers.map((p, index) => {
+                if (index === 0) return `<div class="text-3xl font-bold text-gray-800">👑 ${p.name}</div>`;
+                if (index === 1) return `<div class="text-2xl font-semibold text-gray-700">🥈 ${p.name}</div>`;
+                if (index === 2) return `<div class="text-xl font-medium text-gray-600">🥉 ${p.name}</div>`;
+            }).join('');
+
+            currentRoundInfoDiv.innerHTML = `
+                <div class="text-center text-4xl font-bold text-green-700 mb-4">最終結果</div>
+                <div class="flex flex-col items-center space-y-4">${topPlayerNamesHtml}</div>
+            `;
+            
+            standingsHeader.textContent = '最終順位';
+            standingsHeader.classList.add('text-center', 'text-2xl', 'font-bold', 'text-green-700');
+            nextRoundBtn.style.display = 'none';
+            showMessage('トーナメントが終了しました！');
+        }
+
+        // 新しいラウンドを開始する関数
+        function startNewRound() {
+            if (players.length < 2) {
+                showMessage('2人以上の参加者が必要です。');
+                return;
+            }
+            if (currentRound > 0) {
+                 showMessage('現在のラウンドの結果をすべて入力してから、次のラウンドを開始してください。');
+                 return;
+            }
+
+            isFinalStandings = false;
+            currentPairings = createPairings();
+            currentRound++;
+
+            currentRoundInfoDiv.textContent = `ラウンド ${currentRound} (推奨ラウンド数: ${requiredRounds})`;
+            renderPairings();
+            startRoundBtn.style.display = 'none';
+            showMessage(`ラウンド ${currentRound} が開始されました。`);
+        }
+
+        // ラウンドを終了して次のステップに進む関数
+        function proceedToNextStep() {
+            // スコアとゲーム数を更新
+            currentPairings.forEach(pairing => {
+                const player1 = players.find(p => p.name === pairing.player1);
+                const player2 = players.find(p => p.name === pairing.player2);
+
+                if (pairing.result === 'player1') {
+                    player1.score += 1;
+                } else if (pairing.result === 'player2') {
+                    if (player2.name !== 'Bye') {
+                        player2.score += 1;
+                    }
+                } else if (pairing.result === 'draw') {
+                    player1.score += 0.5;
+                    player2.score += 0.5;
+                }
+                
+                // ゲーム数を記録
+                if (player1) {
+                    player1.gamesWon += pairing.games.p1;
+                    player1.gamesLost += pairing.games.p2;
+                }
+                if (player2 && player2.name !== 'Bye') {
+                    player2.gamesWon += pairing.games.p2;
+                    player2.gamesLost += pairing.games.p1;
+                }
+
+                // 対戦相手を記録
+                if (player1 && player2) {
+                    if (player2.name !== 'Bye') {
+                        player1.opponents.push(player2.name);
+                        player2.opponents.push(player1.name);
+                    } else {
+                        player1.byes++;
+                    }
+                }
+            });
+
+            tournamentRounds.push({ round: currentRound, pairings: currentPairings });
+
+            if (currentRound >= requiredRounds) {
+                showFinalStandings();
+            } else {
+                renderStandings();
+                pairingsDiv.innerHTML = '';
+                currentRoundInfoDiv.textContent = `ラウンド ${currentRound} が終了しました。次のラウンドを開始してください。`;
+                nextRoundBtn.style.display = 'none';
+                
+                currentPairings = createPairings();
+                currentRound++;
+
+                currentRoundInfoDiv.textContent = `ラウンド ${currentRound} (推奨ラウンド数: ${requiredRounds})`;
+                renderPairings();
+                showMessage(`ラウンド ${currentRound} が開始されました。`);
+            }
+        }
+        
+        // アプリを初期状態にリセットする関数
+        function resetApp() {
+            players = [];
+            tournamentRounds = [];
+            currentPairings = [];
+            currentRound = 0;
+            requiredRounds = 0;
+            isFinalStandings = false;
+            
+            playerNameInput.value = '';
+            renderPlayerList();
+            renderStandings();
+            pairingsDiv.innerHTML = '';
+            currentRoundInfoDiv.textContent = 'ラウンドはまだ開始されていません。';
+            startRoundBtn.style.display = 'block';
+            nextRoundBtn.style.display = 'none';
+            standingsHeader.textContent = '順位';
+            standingsHeader.classList.remove('text-center', 'text-2xl', 'font-bold', 'text-green-700');
+            
+            showMessage('アプリがリセットされました。');
+            hideResetConfirmation();
+        }
+
+        // 初期表示
+        renderStandings();
+        renderPlayerList();
+
+        // イベントリスナー
+        confirmResetBtn.addEventListener('click', resetApp);
+        cancelResetBtn.addEventListener('click', hideResetConfirmation);
+    </script>
+</body>
+</html>
