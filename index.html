@@ -238,7 +238,8 @@
                     .sort((a, b) => a.score - b.score)
                     .shift() || unpairedPlayers.pop(); // 見つからない場合は最後のプレイヤー
 
-                pairings.push({ player1: byePlayer.name, player2: 'Bye', result: 'player1' });
+                // Byeのペアリングにも games オブジェクトを追加
+                pairings.push({ player1: byePlayer.name, player2: 'Bye', result: 'player1', games: { p1: 0, p2: 0 }, isConfirmed: false });
                 // byePlayerを未ペアリングリストから削除
                 const byeIndex = unpairedPlayers.findIndex(p => p.name === byePlayer.name);
                 if(byeIndex !== -1) {
