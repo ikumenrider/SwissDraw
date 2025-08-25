@@ -150,9 +150,13 @@
                         name: name,
                         score: 0,
                         opponents: [],
+                        results: {}, // 直接対決の結果を記録するためのオブジェクト
                         byes: 0,
                         gamesWon: 0, // 取得ゲーム数
                         gamesLost: 0, // 失ったゲーム数
+                        gamesDifference: 0, // 得失点差
+                        wins: 0, // 勝利数
+                        losses: 0, // 敗北数
                     });
                 }
             });
@@ -214,20 +218,27 @@
 
         // スイスドローのペアリングを作成する関数
         function createPairings() {
-            // スコアの高い順にプレイヤーをソート
-            const sortedPlayers = [...players].sort((a, b) => {
-                if (b.score !== a.score) return b.score - a.score;
-                // スコアが同じ場合はOMWPでソート
-                const omwpA = calculateOMWP(a);
-                const omwpB = calculateOMWP(b);
-                if (omwpB !== omwpA) return omwpB - omwpA;
-                // OMWPも同じ場合はGWPでソート
-                const gwpA = calculateGWP(a);
-                const gwpB = calculateGWP(b);
-                return gwpB - gwpA;
-            });
+            let unpairedPlayers;
+            
+            // ラウンド1は完全にランダムなペアリング
+            if (currentRound === 0) {
+                unpairedPlayers = [...players].sort(() => Math.random() - 0.5);
+            } else {
+                // ラウンド2以降はスコア、得失点差、最後にランダムでソート
+                unpairedPlayers = [...players].sort((a, b) => {
+                    // 1. 勝利数で比較
+                    if (b.score !== a.score) return b.score - a.score;
+                    
+                    // 2. 得失点差で比較
+                    const aGamesDiff = a.gamesWon - a.gamesLost;
+                    const bGamesDiff = b.gamesWon - b.gamesLost;
+                    if (bGamesDiff !== aGamesDiff) return bGamesDiff - aGamesDiff;
+                    
+                    // 3. 全てが同じ場合、ランダムにソート
+                    return Math.random() - 0.5;
+                });
+            }
 
-            const unpairedPlayers = [...sortedPlayers];
             const pairings = [];
             
             // 参加者数が奇数の場合、Bye（不戦勝）を決定
@@ -382,12 +393,14 @@
             const allResultsEntered = currentPairings.every(p => p.isConfirmed || p.player2 === 'Bye');
             if (allResultsEntered) {
                 nextRoundBtn.style.display = 'block';
-                if (currentRound >= requiredRounds) {
+                // プレイヤー全員が試合を終えているかを確認
+                // 次のラウンドに進むか、最終結果を表示するかを判断
+                const playersToPlayNextRound = players.filter(p => p.opponents.length < requiredRounds);
+                
+                if (playersToPlayNextRound.length <= 1) {
                     nextRoundBtn.textContent = '最終結果';
-                    nextRoundBtn.onclick = showFinalStandings;
                 } else {
                     nextRoundBtn.textContent = '次のラウンドに進む';
-                    nextRoundBtn.onclick = proceedToNextStep;  
                 }
             } else {
                 nextRoundBtn.style.display = 'none';
@@ -404,63 +417,48 @@
             showMessage('試合結果を解除しました。');
         }
         
-        // プレイヤーのOMWP（オポネント・マッチ・ウィン・パーセンテージ）を計算する関数
-        function calculateOMWP(player) {
-            if (player.opponents.length === 0) {
-                return 0;
-            }
-
-            let totalOpponentMWP = 0;
-            let opponentCount = 0;
-            
-            player.opponents.forEach(opponentName => {
-                const opponent = players.find(p => p.name === opponentName);
-                if (opponent) {
-                    const matchesPlayed = opponent.opponents.length;
-                    if (matchesPlayed > 0) {
-                        const opponentMWP = opponent.score / matchesPlayed;
-                        totalOpponentMWP += Math.max(0.33, opponentMWP);
-                        opponentCount++;
-                    }
-                }
-            });
-
-            return opponentCount > 0 ? totalOpponentMWP / opponentCount : 0;
-        }
-        
-        // プレイヤーのGWP（ゲーム・ウィン・パーセンテージ）を計算する関数
-        function calculateGWP(player) {
-            const totalGames = player.gamesWon + player.gamesLost;
-            if (totalGames === 0) {
-                return 0;
-            }
-            return player.gamesWon / totalGames;
-        }
-
         // 順位をレンダリングする関数
         function renderStandings() {
-            // スコア、OMWP、GWPに基づいてプレイヤーをソート
+            // 順位付けロジック
             players.sort((a, b) => {
+                // 1. 勝利数で比較
                 if (b.score !== a.score) {
                     return b.score - a.score;
                 }
-                const omwpA = calculateOMWP(a);
-                const omwpB = calculateOMWP(b);
-                if (omwpB !== omwpA) {
-                    return omwpB - omwpA;
+                
+                // 2. 得失点差で比較
+                const aGamesDiff = a.gamesWon - a.gamesLost;
+                const bGamesDiff = b.gamesWon - b.gamesLost;
+                if (bGamesDiff !== aGamesDiff) {
+                    return bGamesDiff - aGamesDiff;
                 }
-                const gwpA = calculateGWP(a);
-                const gwpB = calculateGWP(b);
-                return gwpB - gwpA;
+
+                // 3. 直接対決の勝敗で比較
+                const aResultAgainstB = a.results[b.name];
+                const bResultAgainstA = b.results[a.name];
+                
+                if (aResultAgainstB !== undefined || bResultAgainstA !== undefined) {
+                    if (aResultAgainstB === 'win') {
+                        return -1; // AがBに勝っていればAが上位
+                    }
+                    if (bResultAgainstA === 'win') {
+                        return 1; // BがAに勝っていればBが上位
+                    }
+                }
+                
+                // 4. 全てが同じ場合、ランダムにソート
+                return Math.random() - 0.5;
             });
             
             standingsDiv.innerHTML = `
                 <div class="flex font-semibold text-gray-700 border-b-2 border-gray-300 pb-2">
                     <span class="w-1/6">順位</span>
                     <span class="w-2/6">名前</span>
-                    <span class="w-1/6 text-center">スコア</span>
-                    <span class="w-1/6 text-center">OMWP</span>
-                    <span class="w-1/6 text-center">GWP</span>
+                    <span class="w-1/6 text-center">勝利数</span>
+                    <span class="w-1/6 text-center">敗北数</span>
+                    <span class="w-1/6 text-center">得点</span>
+                    <span class="w-1/6 text-center">失点</span>
+                    <span class="w-1/6 text-center">得失点差</span>
                 </div>
             `;
 
@@ -468,8 +466,7 @@
                 const playerDiv = document.createElement('div');
                 playerDiv.className = 'flex items-center text-gray-800 py-2 border-b border-gray-200';
                 
-                const omwp = calculateOMWP(player);
-                const gwp = calculateGWP(player);
+                const gamesDifference = player.gamesWon - player.gamesLost;
                 
                 let rankDisplay = index + 1;
                 let playerNameWithMedal = player.name;
@@ -488,9 +485,11 @@
                 playerDiv.innerHTML = `
                     <span class="w-1/6 font-bold text-lg text-gray-600">${rankDisplay}</span>
                     <span class="w-2/6">${playerNameWithMedal}</span>
-                    <span class="w-1/6 font-semibold text-center">${player.score}</span>
-                    <span class="w-1/6 text-sm text-center">${omwp.toFixed(2)}</span>
-                    <span class="w-1/6 text-sm text-center">${gwp.toFixed(2)}</span>
+                    <span class="w-1/6 font-semibold text-center">${player.wins}</span>
+                    <span class="w-1/6 font-semibold text-center">${player.losses}</span>
+                    <span class="w-1/6 text-sm text-center">${player.gamesWon}</span>
+                    <span class="w-1/6 text-sm text-center">${player.gamesLost}</span>
+                    <span class="w-1/6 text-sm text-center">${gamesDifference}</span>
                 `;
                 standingsDiv.appendChild(playerDiv);
             });
@@ -533,8 +532,8 @@
             }
             
             isFinalStandings = false;
-            currentPairings = createPairings();
             currentRound++;
+            currentPairings = createPairings();
 
             currentRoundInfoDiv.textContent = `ラウンド ${currentRound} (推奨ラウンド数: ${requiredRounds})`;
             renderPairings();
@@ -548,54 +547,77 @@
             currentPairings.forEach(pairing => {
                 const player1 = players.find(p => p.name === pairing.player1);
                 const player2 = players.find(p => p.name === pairing.player2);
+                
+                // player1が存在しない場合はエラー
+                if (!player1) {
+                    console.error("Player1 not found for pairing:", pairing);
+                    return;
+                }
 
+                // Byeの場合はplayer2の処理をスキップし、player1の不戦勝を記録
+                if (pairing.player2 === 'Bye') {
+                    player1.score += 1;
+                    player1.byes++;
+                    return; // 次のペアリングへ
+                }
+
+                // ここに来るのはByeではない通常の対戦
+                if (!player2) {
+                    console.error("Player2 not found for pairing (should not happen for non-Bye):", pairing);
+                    return;
+                }
+
+                // 勝敗によるスコア更新
                 if (pairing.result === 'player1') {
                     player1.score += 1;
+                    player1.wins++;
+                    player2.losses++;
+                    player1.results[player2.name] = 'win';
+                    player2.results[player1.name] = 'lose';
                 } else if (pairing.result === 'player2') {
-                    if (player2.name !== 'Bye') {
-                        player2.score += 1;
-                    }
+                    player2.score += 1;
+                    player2.wins++;
+                    player1.losses++;
+                    player2.results[player1.name] = 'win';
+                    player1.results[player2.name] = 'lose';
                 } else if (pairing.result === 'draw') {
                     player1.score += 0.5;
                     player2.score += 0.5;
+                    player1.results[player2.name] = 'draw';
+                    player2.results[player1.name] = 'draw';
                 }
                 
                 // ゲーム数を記録
-                if (player1) {
-                    player1.gamesWon += pairing.games.p1;
-                    player1.gamesLost += pairing.games.p2;
-                }
-                if (player2 && player2.name !== 'Bye') {
-                    player2.gamesWon += pairing.games.p2;
-                    player2.gamesLost += pairing.games.p1;
-                }
+                player1.gamesWon += pairing.games.p1;
+                player1.gamesLost += pairing.games.p2;
+                player1.gamesDifference += (pairing.games.p1 - pairing.games.p2);
+
+                player2.gamesWon += pairing.games.p2;
+                player2.gamesLost += pairing.games.p1;
+                player2.gamesDifference += (pairing.games.p2 - pairing.games.p1);
 
                 // 対戦相手を記録
-                if (player1 && player2) {
-                    if (player2.name !== 'Bye') {
-                        player1.opponents.push(player2.name);
-                        player2.opponents.push(player1.name);
-                    } else {
-                        player1.byes++;
-                    }
-                }
+                player1.opponents.push(player2.name);
+                player2.opponents.push(player1.name);
             });
 
             tournamentRounds.push({ round: currentRound, pairings: currentPairings });
+            renderStandings();
 
-            if (currentRound >= requiredRounds) {
+            // 推奨ラウンド数に達しているか、または未消化プレイヤーが1人以下かチェックする
+            const playersToPlayNextRound = players.filter(p => p.opponents.length < requiredRounds);
+
+            // 推奨ラウンド数に達したか、未消化プレイヤーが1人以下なら終了
+            if (currentRound >= requiredRounds && playersToPlayNextRound.length <= 1) {
                 showFinalStandings();
             } else {
-                renderStandings();
-                pairingsDiv.innerHTML = '';
-                currentRoundInfoDiv.textContent = `ラウンド ${currentRound} が終了しました。次のラウンドを開始してください。`;
-                nextRoundBtn.style.display = 'none';
-                
-                currentPairings = createPairings();
+                // 新しいラウンドを開始
                 currentRound++;
-
+                currentPairings = createPairings();
+                pairingsDiv.innerHTML = '';
                 currentRoundInfoDiv.textContent = `ラウンド ${currentRound} (推奨ラウンド数: ${requiredRounds})`;
                 renderPairings();
+                nextRoundBtn.style.display = 'none';
                 showMessage(`ラウンド ${currentRound} が開始されました。`);
             }
         }
