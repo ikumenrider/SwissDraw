@@ -34,7 +34,7 @@
         <!-- コントロールボタン -->
         <div class="flex flex-wrap justify-center gap-4 mb-6">
             <button id="startRoundBtn" onclick="startNewRound()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-md transition duration-300 ease-in-out transform hover:scale-105">ラウンド開始</button>
-            <button id="resetBtn" onclick="showResetConfirmation()" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-md transition duration-300 ease-in-out transform hover:scale-105">リセット</button>
+            <button id="resetBtn" onclick="showResetConfirmation()" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-md transition duration-300 ease-in-out transform hover:scale-105">全リセット</button>
         </div>
         
         <!-- ラウンドとペアリング -->
@@ -54,6 +54,10 @@
             <div id="standings" class="space-y-2">
                 <!-- 順位はここに動的に追加されます -->
             </div>
+            <!-- トーナメント組みなおしボタン -->
+            <div id="reconfigureBtnDiv" class="flex justify-center mt-4">
+                <button onclick="showResetConfirmation()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out transform hover:scale-105">トーナメント組みなおし</button>
+            </div>
         </div>
 
         <!-- メッセージボックス -->
@@ -67,7 +71,7 @@
                 <div class="mt-3 text-center">
                     <h3 class="text-lg leading-6 font-medium text-gray-900">本当にリセットしますか？</h3>
                     <div class="mt-2 px-7 py-3">
-                        <p class="text-sm text-gray-500">全てのトーナメントデータが失われます。</p>
+                        <p id="resetMessage" class="text-sm text-gray-500">この操作は元に戻せません。</p>
                     </div>
                     <div class="items-center px-4 py-3">
                         <button id="confirmResetBtn" class="px-4 py-2 bg-red-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 mb-2">
@@ -95,6 +99,8 @@
         let requiredRounds = 0;
         // 最終結果表示フラグ
         let isFinalStandings = false;
+        // リセットの種類
+        let resetType = 'tournament';
 
         // UI要素の取得
         const playerNameInput = document.getElementById('playerNameInput');
@@ -111,6 +117,7 @@
         const confirmResetBtn = document.getElementById('confirmResetBtn');
         const cancelResetBtn = document.getElementById('cancelResetBtn');
         const standingsHeader = document.getElementById('standingsHeader');
+        const resetMessage = document.getElementById('resetMessage');
 
         // メッセージを表示する関数
         function showMessage(message) {
@@ -123,6 +130,12 @@
         
         // リセット確認ダイアログを表示する関数
         function showResetConfirmation() {
+            resetType = event.target.textContent.includes('トーナメント') ? 'tournament' : 'full';
+            if (resetType === 'tournament') {
+                resetMessage.textContent = '現在のトーナメントデータがリセットされます。参加者リストは保持されます。';
+            } else {
+                resetMessage.textContent = '全てのデータ（参加者リストを含む）が失われます。';
+            }
             confirmationModal.classList.remove('hidden');
         }
 
@@ -584,7 +597,7 @@
                     player1.score += 0.5;
                     player2.score += 0.5;
                     player1.results[player2.name] = 'draw';
-                    player2.results[player1.name] = 'draw';
+                    player2.results[p1.name] = 'draw';
                 }
                 
                 // ゲーム数を記録
@@ -622,16 +635,33 @@
             }
         }
         
-        // アプリを初期状態にリセットする関数
+        // アプリを初期状態にリセットする関数 (全リセット)
         function resetApp() {
             players = [];
+            playerNameInput.value = '';
+            resetTournament();
+            showMessage('全てのデータがリセットされました。');
+        }
+        
+        // トーナメントをリセットする関数 (参加者リストは保持)
+        function resetTournament() {
+            players.forEach(player => {
+                player.score = 0;
+                player.opponents = [];
+                player.results = {};
+                player.byes = 0;
+                player.gamesWon = 0;
+                player.gamesLost = 0;
+                player.gamesDifference = 0;
+                player.wins = 0;
+                player.losses = 0;
+            });
+
             tournamentRounds = [];
             currentPairings = [];
             currentRound = 0;
-            requiredRounds = 0;
             isFinalStandings = false;
             
-            playerNameInput.value = '';
             renderPlayerList();
             renderStandings();
             pairingsDiv.innerHTML = '';
@@ -641,7 +671,7 @@
             standingsHeader.textContent = '順位';
             standingsHeader.classList.remove('text-center', 'text-2xl', 'font-bold', 'text-green-700');
             
-            showMessage('アプリがリセットされました。');
+            showMessage('トーナメントデータがリセットされました。');
             hideResetConfirmation();
         }
 
@@ -650,7 +680,13 @@
         renderPlayerList();
 
         // イベントリスナー
-        confirmResetBtn.addEventListener('click', resetApp);
+        confirmResetBtn.addEventListener('click', () => {
+            if (resetType === 'full') {
+                resetApp();
+            } else {
+                resetTournament();
+            }
+        });
         cancelResetBtn.addEventListener('click', hideResetConfirmation);
     </script>
 </body>
