@@ -14,7 +14,22 @@
     </style>
 </head>
 <body class="bg-gray-100 p-4 sm:p-8">
-    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8">
+    
+    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6 sm:p-8 relative">
+        <!-- バージョンと製作者情報を同じ行の左右に配置 -->
+        <div class="flex justify-between items-center mb-6">
+            <div class="text-sm">
+                <span class="text-gray-500 font-semibold">Version:</span>
+                <span class="text-gray-700 font-bold">1.0</span>
+            </div>
+            <div class="text-sm">
+                <span class="text-gray-500 font-semibold">製作者:</span>
+                <a href="https://ikumenrider.github.io/ikumenrider/" target="_blank" class="p-1 px-3 bg-gray-200 text-gray-700 rounded-lg font-bold transition-all duration-200 transform hover:scale-105 hover:bg-gray-300">
+                    育面ライダー
+                </a>
+            </div>
+        </div>
+        
         <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">スイスドロー トーナメント</h1>
 
         <!-- 参加者追加フォーム -->
@@ -22,7 +37,7 @@
             <h2 class="text-xl font-semibold text-gray-700 mb-4">参加者</h2>
             <p class="text-sm text-gray-500 mb-1">参加者の名前を入力してください(1行に1名)</p>
             <div class="flex flex-col sm:flex-row gap-4 mb-4">
-                <textarea id="playerNameInput" rows="4" placeholder="例：山田太郎&#10;田中花子&#10;鈴木健太" class="flex-grow p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                <textarea id="playerNameInput" rows="4" placeholder="選手名1&#10;選手名2&#10;選手名3&#10;…" class="flex-grow p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                 <button onclick="addPlayers()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out transform hover:scale-105">参加者を追加</button>
             </div>
             <div id="playerList" class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-gray-600">
@@ -49,7 +64,7 @@
         </div>
         
         <!-- 結果表示 -->
-        <div class="bg-gray-50 p-4 rounded-lg">
+        <div class="bg-gray-50 p-4 rounded-lg mb-6">
             <h2 id="standingsHeader" class="text-xl font-semibold text-gray-700 mb-4">順位</h2>
             <div id="standings" class="space-y-2">
                 <!-- 順位はここに動的に追加されます -->
@@ -58,6 +73,13 @@
             <div id="reconfigureBtnDiv" class="flex justify-center mt-4">
                 <button onclick="showResetConfirmation()" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out transform hover:scale-105">トーナメント組みなおし</button>
             </div>
+        </div>
+        
+        <!-- アプリ一覧ボタン -->
+        <div class="flex justify-center">
+            <a id="btn-app-list" href="https://ikumenrider.github.io/ikumenrider/" target="_blank" class="p-3 px-5 bg-green-300 text-gray-900 font-bold rounded-xl shadow-lg hover:bg-green-400 transition-all duration-200 transform hover:scale-105">
+                アプリ一覧
+            </a>
         </div>
 
         <!-- メッセージボックス -->
